@@ -1,6 +1,6 @@
 {
   "title": "KittyAqua8103",
-  "version_tag": "v0.1-alpha.1",
+  "version_tag": "v0.1-alpha.2",
   "type": "project",
   "children": [
     { "name": "profile.md", "type": "file" },

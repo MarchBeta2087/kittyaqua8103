@@ -1,9 +1,1 @@
-*
-!.git/
-!related_figures/
-!*.md
-!meta.json
-!.gitignore
-!COPYING.*
-!text_packager.py
-!LICENSE
+*.bak
