@@ -1,0 +1,26 @@
+name: 设定勘误 / 逻辑捉虫 (Lore Bug)
+description: 发现时间线冲突、人物信息矛盾、错别字或数值逻辑错误
+labels: ["bug", "lore-errata"]
+body:
+  - type: markdown
+    attributes:
+      value: "感谢帮李雪晴抓虫！如果发现设定中的漏洞或前后不一致，请在此反馈。"
+  - type: input
+    id: location
+    attributes:
+      label: 出现位置
+      description: 哪份文件、哪一行或哪一个小节？（例如：company.md 的用工结构表）
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 矛盾或错误描述
+      description: 具体的错误事实是什么？为什么你认为这里存在矛盾？
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 修正建议
+      description: 你认为应该如何修改更合理？

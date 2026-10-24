@@ -1,0 +1,21 @@
+name: 剧情补白 / 脑洞预沟通 (Story Proposal)
+description: 在动手写一段主线补充剧情或 alt 平行分支前，先在此沟通避免冲突
+labels: ["proposal", "writing"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: 拟补充的故事概要
+      description: 你打算补充谁的故事、什么时间段的事？（例如：周雨桐在 2033 年夏天与李雪晴的对话细节）
+    validations:
+      required: true
+  - type: dropdown
+    id: target
+    attributes:
+      label: 归属方向
+      options:
+        - "主线正史补白 (走 main 分支)"
+        - "平行宇宙 IF 线 (走 alt/ 分支)"
+        - "独立二创衍生（同人图 / 音频 / MC 地图）"
+    validations:
+      required: true
