@@ -14,13 +14,15 @@
     { "name": "vtb.md", "type": "file" },
     { "name": "life_experience.md", "type": "file" },
     { "name": "company.md", "type": "file" },
+    { "name": "negotiation_process.md", "type": "file" },
     {
       "name": "related_figures",
       "title": "部分相关人物",
       "type": "directory",
       "children": [
         { "name": "family_members.md", "type": "file" },
-        { "name": "negotiation.md", "type": "file" }
+        { "name": "negotiation.md", "type": "file" },
+        { "name": "relationships.md", "type": "file" }
       ]
     }
   ],
