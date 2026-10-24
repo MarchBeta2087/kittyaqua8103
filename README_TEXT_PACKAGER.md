@@ -1,5 +1,7 @@
 # text_packager.py 使用文档
 
+> 本文件同步自 <https://github.com/MarchBeta2087/text_packager> 的 `README.md`（工具版本 v1.1）。修改请先改上游，再同步回本仓库。
+
 ## 简介
 
 `text_packager.py` 是一个轻量级文档打包工具，用于将多个 Markdown（`.md`）文件按照指定的目录结构合并为一份完整的 Markdown 文档。它特别适合用于整理项目文档、人物设定集、技术手册等需要版本化聚合输出的场景。
@@ -21,7 +23,9 @@
 
 ### Python 版本
 
-Python 3.6 及以上（推荐 Python 3.8+）。
+Python 3.7 及以上（推荐 3.9+）。
+
+> 3.6 跑不了：`get_branch()` 用了 `subprocess.run()` 的 `capture_output` 与 `text` 参数，这两个参数从 3.7 开始提供。
 
 ### 操作系统
 
@@ -40,7 +44,13 @@ Python 3.6 及以上（推荐 Python 3.8+）。
 pip install pytz tzlocal
 ```
 
-其余使用的库（`json`、`datetime`、`pathlib`）均为 Python 标准库，无需额外安装。
+其余使用的库（`json`、`re`、`subprocess`、`datetime`、`pathlib`）均为 Python 标准库，无需额外安装。
+
+也可以直接：
+
+```bash
+pip install -r requirements.txt
+```
 
 ## 快速开始
 
@@ -69,7 +79,7 @@ python text_packager.py
 {
   "title": "项目标题",
   "version_tag": "版本标签",
-  "timeline": "2033-11-13",
+  "timeline": "2040-01-01",
   "author": "作者名",
   "type": "project",
   "children": [
@@ -85,10 +95,12 @@ python text_packager.py
     }
   ],
   "extend": [
-    { "value": "README.md::时间线", "section": "时间线说明" }
+    { "value": "README.md::快速开始", "section": "快速开始（摘录）" }
   ]
 }
 ```
+
+> 示例里的 `timeline` 只是占位日期：不需要时间线锁定，把这一行删掉即可；不需要附加内容，把 `extend` 删掉即可。
 
 ### 字段说明
 
@@ -142,6 +154,8 @@ python text_packager.py
 
 `policy` 用来声明项目自己的规矩（时间线与分支）。**不写这个字段时，脚本只做打包**：不校验分支、不要求声明文件、不附加差异节，`timeline` 仅用于标题。
 
+> 下面这一节的所有字段（包含 `alt/<author>/<diverge>`、`ALT.md`、`与主线的差异` 这些默认值）**都只跟具体项目有关，与工具本身无关**，可以整段改写或直接不用。
+
 ```json
 "policy": {
   "enforce_timeline": true,
@@ -173,11 +187,13 @@ python text_packager.py
 
 ```json
 "extend": [
-  { "value": "README.md::时间线", "section": "时间线说明" },
-  { "value": "MANIFEST.md" },
+  { "value": "README.md::快速开始", "section": "快速开始（摘录）" },
+  { "value": "README.md" },
   { "value": "text:本文件由脚本生成。", "section": "说明", "position": "before" }
 ]
 ```
+
+> 示例以本仓库的 `README.md` 为例；换成你项目里实际存在的 `.md` 文件即可。第二条是“整篇引入”，如果同时也写了 `section`，会覆盖文件自带的标题。
 
 ### 字段说明
 
@@ -195,7 +211,7 @@ python text_packager.py
 
 正文中的标题会统一降一级（`##` → `###`），与 `children` 中文件的处理方式一致。小节按标题文字精确匹配，取到下一个同级或更高级标题为止；找不到文件或小节时直接报错。
 
-在 `alt/*` 分支上，脚本还会自动追加一节“与主线的差异”，内容取自 `ALT.md`，无需手写。
+在 `alt/*` 分支上，脚本还会自动追加一节“与主线的差异”，内容取自 `ALT.md`，无需手写。这是 `policy` 启用后的行为，不启用时不会有这一节。
 
 ## 工作原理
 
@@ -212,6 +228,8 @@ python text_packager.py
 6. 写入文件：输出为 `packaged_file.md`。
 
 ## 示例
+
+这是一个**最小可用配置**：不写 `policy`、不写 `extend` 也能正常跑。
 
 假设有以下文件结构：
 
@@ -295,7 +313,7 @@ python text_packager.py
 | 文件不是 `.md` 后缀 | `仅支持 Markdown 文件（.md）` |
 | `timeline` 格式错误 | `meta.json 的 timeline 必须为 YYYY-MM-DD……` |
 | 启用策略但缺少 `timeline` | `已启用 policy.enforce_timeline，但 meta.json 缺少 timeline 字段……` |
-| 主线时间线与 `mainline` 不符 | `主线 main 的 timeline 必须为 2033-11-13……` |
+| 主线时间线与 `mainline` 不符 | `主线 main 的 timeline 必须为 <mainline>……` |
 | `policy` 含未知字段 | `policy 含未知字段：enforce_timline` |
 | 分支命名不符 | `分支必须命名为 alt/<author>/<diverge>，当前为……` |
 | `alt` 分支缺少声明文件 | `ALT.md 不存在：alt/<author>/<diverge> 分支必须提供分支声明` |
