@@ -66,6 +66,8 @@ alt/<author>/<diverge>
 
 - 该文件由 `text_packager.py` 生成，**请勿手工修改**；改完源文件后重新运行脚本，并把生成结果与源文件一起提交。
 - 需要往打包结果里追加内容时，用 `meta.json` 的 `extend` 字段（支持追加文件、文件中的某一节或内联文本，详见 `README_TEXT_PACKAGER.md`），不要手改生成物。
+- 时间线与分支规则由 `meta.json` 的 `policy` 字段启用（本仓库 `enforce_timeline: true`）；`text_packager.py` 本身是通用工具，不写 `policy` 的项目不受这些规则约束。
+- 工具版本与设定版本相互独立：工具版本见脚本顶部的 `TOOL_VERSION`、控制台输出与打包文件末尾；`meta.json` 的 `version_tag` 只表示设定版本。
 - 脚本会校验时间线：`main` 上 `timeline` 必须为 `2033-11-13`；`alt/*` 上必须偏离该日期，且 `ALT.md` 四字段齐全。
 - 打包标题会带上时间线；`alt` 分支还会带上分支名、作者与分歧点，避免读者混淆版本。
 

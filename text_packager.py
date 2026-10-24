@@ -1,6 +1,7 @@
 # text_packager.py
-# 354 lines of code, including annotations and blank lines
-# Time: 2026-06-19T15:00:00+08:00
+# Version: 1.1
+# 467 lines of code, including annotations and blank lines
+# Created: 2026-06-19T15:00:00+08:00
 # Copyright (c) 2026 MarchBeta2087
 # SPDX-License-Identifier: MIT
 
@@ -15,13 +16,25 @@ from pathlib import Path
 tz = pytz.timezone(get_localzone().key)
 time_text = datetime.now(tz).isoformat(timespec='seconds')
 
-MAINLINE_TIMELINE = "2033-11-13"
-MAIN_BRANCHES = {"main", "master"}
-ALT_PREFIX = "alt/"
-ALT_FIELDS = ("作者", "锚点", "分歧点", "与主线差异")
-ALT_DIFF_SECTION = "与主线的差异"
+TOOL_VERSION = "1.1"
+
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
+
+POLICY_DEFAULTS = {
+    "enforce_timeline": True,
+    "mainline": None,
+    "main_branches": ["main", "master"],
+    "alt_branch_pattern": "alt/<author>/<diverge>",
+    "alt_declaration": "ALT.md",
+    "alt_declaration_fields": {
+        "author": "作者",
+        "anchor": "锚点",
+        "diverge": "分歧点",
+        "differences": "与主线差异",
+    },
+    "alt_diff_section": "与主线的差异",
+}
 
 def get_file_list(directory, path = Path(), depth = 1):
     if type(directory) == list:
@@ -65,10 +78,76 @@ def get_branch():
     except (OSError, subprocess.CalledProcessError):
         return None
 
-def parse_alt_declaration(file_path = Path("ALT.md")):
-    """解析 ALT.md 的四个字段，缺失或为空时抛 ValueError。"""
+def load_policy(meta_json):
+    """读取并校验 meta.json 的 policy；未声明时返回 None（纯打包模式）。"""
+    raw = meta_json.get("policy")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("policy 字段的值必须为对象")
+
+    unknown = set(raw) - set(POLICY_DEFAULTS)
+    if unknown:
+        raise ValueError(f"policy 含未知字段：{'、'.join(sorted(unknown))}")
+
+    policy = dict(POLICY_DEFAULTS)
+    policy.update(raw)
+
+    if not isinstance(policy["enforce_timeline"], bool):
+        raise ValueError("policy.enforce_timeline 必须为布尔值")
+    if not policy["enforce_timeline"]:
+        return policy
+
+    mainline = str(policy["mainline"] or "").strip()
+    if not DATE_PATTERN.match(mainline):
+        raise ValueError("已启用 policy.enforce_timeline，policy.mainline 必须为 YYYY-MM-DD")
+    policy["mainline"] = mainline
+
+    branches = policy["main_branches"]
+    if (not isinstance(branches, list) or not branches
+            or not all(isinstance(branch, str) and branch.strip() for branch in branches)):
+        raise ValueError("policy.main_branches 必须为非空字符串数组")
+
+    pattern = str(policy["alt_branch_pattern"]).strip()
+    pattern_segments = pattern.split("/")
+    if (len(pattern_segments) < 2
+            or pattern_segments[0].startswith("<")
+            or "<author>" not in pattern_segments
+            or "<diverge>" not in pattern_segments):
+        raise ValueError("policy.alt_branch_pattern 的第一段必须为字面量，且必须包含 <author> 与 <diverge>")
+    policy["alt_branch_pattern"] = pattern
+
+    declaration = str(policy["alt_declaration"]).strip()
+    if not declaration:
+        raise ValueError("policy.alt_declaration 必须为非空字符串")
+    policy["alt_declaration"] = declaration
+
+    labels = policy["alt_declaration_fields"]
+    if not isinstance(labels, dict):
+        raise ValueError("policy.alt_declaration_fields 必须为对象")
+    merged_labels = dict(POLICY_DEFAULTS["alt_declaration_fields"])
+    unknown_labels = set(labels) - set(merged_labels)
+    if unknown_labels:
+        raise ValueError(f"policy.alt_declaration_fields 含未知键：{'、'.join(sorted(unknown_labels))}")
+    merged_labels.update(labels)
+    if not all(isinstance(label, str) and label.strip() for label in merged_labels.values()):
+        raise ValueError("policy.alt_declaration_fields 的值必须为非空字符串")
+    policy["alt_declaration_fields"] = merged_labels
+
+    return policy
+
+def parse_alt_declaration(policy):
+    """解析分支声明的四个字段（作者/锚点/分歧点/差异），缺失或为空时抛 ValueError。"""
+    file_path = Path(policy["alt_declaration"])
+    labels = policy["alt_declaration_fields"]
     if not file_path.exists():
-        raise ValueError(f"{file_path} 不存在：alt 分支必须提供分支声明，模板见 ALT.example.md")
+        raise ValueError(
+            f"{file_path} 不存在：{policy['alt_branch_pattern']} 分支必须提供分支声明"
+        )
+    label_to_key = {label: key for key, label in labels.items()}
+    field_pattern = re.compile(
+        r"^[-*]?\s*(" + "|".join(re.escape(label) for label in label_to_key) + r")\s*[：:]\s*(.*)$"
+    )
     fields = {}
     current = None
     in_code_block = False
@@ -82,65 +161,91 @@ def parse_alt_declaration(file_path = Path("ALT.md")):
         line = line.lstrip(">").strip()
         if not line:
             continue
-        match = re.match(r"^[-*]?\s*(" + "|".join(ALT_FIELDS) + r")\s*[：:]\s*(.*)$", line)
+        match = field_pattern.match(line)
         if match:
-            current = match.group(1)
+            current = label_to_key[match.group(1)]
             fields[current] = match.group(2).strip()
-        elif current == "与主线差异":
-            fields[current] += "\n" + line
-    missing = [field for field in ALT_FIELDS if not fields.get(field, "").strip()]
+        elif current == "differences":
+            fields[current] = fields.get(current, "") + "\n" + line
+    missing = [
+        labels[key]
+        for key in ("author", "anchor", "diverge", "differences")
+        if not fields.get(key, "").strip()
+    ]
     if missing:
         raise ValueError(f"{file_path} 缺少字段或字段为空：{'、'.join(missing)}")
     return fields
 
-def check_timeline(meta_json, branch):
-    """校验 timeline 与当前分支是否匹配，返回打包标题所需的信息。"""
-    timeline = str(meta_json.get("timeline", "")).strip()
-    if not timeline:
-        raise ValueError("meta.json 缺少 timeline 字段（格式 YYYY-MM-DD）")
-    if not DATE_PATTERN.match(timeline):
+def check_timeline(meta_json, branch, policy):
+    """校验 timeline 与当前分支；policy 为 None 时不启用任何项目规则。"""
+    timeline = str(meta_json.get("timeline", "") or "").strip()
+    if timeline and not DATE_PATTERN.match(timeline):
         raise ValueError(f"meta.json 的 timeline 必须为 YYYY-MM-DD，当前为 {timeline}")
+
+    info = {"timeline": timeline or None, "branch": branch, "author": None, "diverge": None, "differences": None}
+    if policy is None or not policy["enforce_timeline"]:
+        return info
+
+    if not timeline:
+        raise ValueError("已启用 policy.enforce_timeline，但 meta.json 缺少 timeline 字段（格式 YYYY-MM-DD）")
+
+    mainline = policy["mainline"]
+    labels = policy["alt_declaration_fields"]
+    declaration_file = policy["alt_declaration"]
 
     if branch is None:
         print("警告：未检测到 Git 分支，跳过时间线锁定校验")
-        return {"timeline": timeline, "branch": None, "author": None, "diverge": None, "differences": None}
+        return info
 
-    if branch in MAIN_BRANCHES:
-        if timeline != MAINLINE_TIMELINE:
+    if branch in policy["main_branches"]:
+        if timeline != mainline:
             raise ValueError(
-                f"主线 {branch} 的 timeline 必须为 {MAINLINE_TIMELINE}，当前为 {timeline}；"
-                "如需其他时间点，请新建 alt/<author>/<diverge> 分支或 fork"
+                f"主线 {branch} 的 timeline 必须为 {mainline}，当前为 {timeline}；"
+                f"如需其他时间点，请新建 {policy['alt_branch_pattern']} 分支或 fork"
             )
-        return {"timeline": timeline, "branch": branch, "author": None, "diverge": None, "differences": None}
+        return info
 
-    if branch.startswith(ALT_PREFIX):
-        parts = branch.split("/")
-        if len(parts) != 3 or not parts[1].strip() or not parts[2].strip():
-            raise ValueError(f"alt 分支必须命名为 alt/<author>/<diverge>，当前为 {branch}")
-        author = parts[1]
-        if timeline == MAINLINE_TIMELINE:
-            raise ValueError(f"alt 分支的时间线不得与主线相同（{MAINLINE_TIMELINE}）")
-        declaration = parse_alt_declaration()
-        if declaration["锚点"] != timeline:
+    pattern_segments = policy["alt_branch_pattern"].split("/")
+    prefix = pattern_segments[0] + "/"
+    if branch.startswith(prefix):
+        values = {}
+        branch_segments = branch.split("/")
+        if len(branch_segments) != len(pattern_segments):
+            raise ValueError(f"分支必须命名为 {policy['alt_branch_pattern']}，当前为 {branch}")
+        for expected, actual in zip(pattern_segments, branch_segments):
+            if expected.startswith("<") and expected.endswith(">"):
+                if not actual.strip():
+                    raise ValueError(f"分支必须命名为 {policy['alt_branch_pattern']}，当前为 {branch}")
+                values[expected[1:-1]] = actual
+            elif expected != actual:
+                raise ValueError(f"分支必须命名为 {policy['alt_branch_pattern']}，当前为 {branch}")
+
+        if timeline == mainline:
+            raise ValueError(f"alt 分支的时间线不得与主线相同（{mainline}）")
+
+        declaration = parse_alt_declaration(policy)
+        if declaration["anchor"] != timeline:
             raise ValueError(
-                f"ALT.md 的锚点（{declaration['锚点']}）必须与 meta.json 的 timeline（{timeline}）一致"
+                f"{declaration_file} 的{labels['anchor']}（{declaration['anchor']}）"
+                f"必须与 meta.json 的 timeline（{timeline}）一致"
             )
-        if not DATE_PATTERN.match(declaration["分歧点"]):
-            raise ValueError(f"ALT.md 的分歧点必须为 YYYY-MM-DD，当前为 {declaration['分歧点']}")
-        if declaration["分歧点"] > timeline:
-            raise ValueError("ALT.md 的分歧点不得晚于锚点")
-        if author.lower() not in declaration["作者"].lower():
-            print(f"警告：分支名中的作者 {author} 未出现在 ALT.md 的“作者”字段中")
+        if not DATE_PATTERN.match(declaration["diverge"]):
+            raise ValueError(f"{declaration_file} 的{labels['diverge']}必须为 YYYY-MM-DD，当前为 {declaration['diverge']}")
+        if declaration["diverge"] > timeline:
+            raise ValueError(f"{declaration_file} 的{labels['diverge']}不得晚于{labels['anchor']}")
+        if values["author"].lower() not in declaration["author"].lower():
+            print(f"警告：分支名中的作者 {values['author']} 未出现在 {declaration_file} 的“{labels['author']}”字段中")
+
         return {
             "timeline": timeline,
             "branch": branch,
-            "author": declaration["作者"],
-            "diverge": declaration["分歧点"],
-            "differences": declaration["与主线差异"].strip(),
+            "author": declaration["author"],
+            "diverge": declaration["diverge"],
+            "differences": declaration["differences"].strip(),
         }
 
-    print(f"提示：当前分支 {branch} 既不是主线也不是 alt，跳过时间线锁定校验")
-    return {"timeline": timeline, "branch": branch, "author": None, "diverge": None, "differences": None}
+    print(f"提示：当前分支 {branch} 既不是主线也不是 {policy['alt_branch_pattern']}，跳过时间线锁定校验")
+    return info
 
 def read_markdown_lines(file_path):
     """读取 Markdown 文件的所有行；后缀不对或文件不存在时抛 ValueError。"""
@@ -202,6 +307,11 @@ def normalize_extend(entries):
         normalized.append({"value": value.strip(), "section": section, "position": position})
     return normalized
 
+def join_label(label, value):
+    """拼接“字段名 + 值”；ASCII 字段名用 ": "，其余用全角冒号。"""
+    separator = ": " if all(ord(char) < 128 for char in label) else "："
+    return label + separator + value
+
 def render_extend_entry(entry):
     """把单个 extend 条目渲染为打包行。"""
     value = entry["value"]
@@ -258,8 +368,9 @@ if __name__ == "__main__":
         except KeyError:
             raise ValueError("请补充根对象 title 和 version_tag 字段")
 
-        # 校验时间线（main 锁定 2033-11-13，alt/* 必须偏离该日期）
-        timeline_info = check_timeline(meta_json, get_branch())
+        # 读取可选策略（未声明时不启用任何项目规则）
+        policy = load_policy(meta_json)
+        timeline_info = check_timeline(meta_json, get_branch(), policy)
 
         # 读取项目结构
         try:
@@ -280,7 +391,9 @@ if __name__ == "__main__":
         extend_entries = normalize_extend(meta_json.get("extend", []))
         
         # 打包文件
-        packaged_title = project_title_version + " · 时间线 " + timeline_info["timeline"]
+        packaged_title = project_title_version
+        if timeline_info["timeline"]:
+            packaged_title += " · 时间线 " + timeline_info["timeline"]
         if timeline_info["author"]:
             packaged_title += (
                 " · 分支 " + timeline_info["branch"]
@@ -321,17 +434,17 @@ if __name__ == "__main__":
         if timeline_info["differences"]:
             packaged_lines += render_extend_entry({
                 "value": "text:"
-                    + "作者：" + timeline_info["author"] + "\n\n"
-                    + "锚点：" + timeline_info["timeline"] + "\n\n"
-                    + "分歧点：" + timeline_info["diverge"] + "\n\n"
+                    + join_label(policy["alt_declaration_fields"]["author"], timeline_info["author"]) + "\n\n"
+                    + join_label(policy["alt_declaration_fields"]["anchor"], timeline_info["timeline"]) + "\n\n"
+                    + join_label(policy["alt_declaration_fields"]["diverge"], timeline_info["diverge"]) + "\n\n"
                     + timeline_info["differences"],
-                "section": ALT_DIFF_SECTION,
+                "section": policy["alt_diff_section"],
                 "position": "after",
             })
 
         packaged_file_path = Path("packaged_file.md").resolve()
         packaged_text = "\n".join(packaged_lines) + "\n"
-        packaged_text += "（本文件由 text_packager.py 自动生成，请勿手工修改）" + "\n"
+        packaged_text += "（本文件由 text_packager v" + TOOL_VERSION + " 自动生成，请勿手工修改）" + "\n"
         packaged_text += "（文档结束）" + "\n"
 
         # 正文未变化时保留原有生成时间，避免每次运行都产生无意义的时间戳差异
@@ -349,6 +462,6 @@ if __name__ == "__main__":
             packaged_file = open(packaged_file_path, "w", encoding = "utf-8")
             packaged_file.write(packaged_text + "\n" + time_text + "\n")
             packaged_file.close()
-            print(f"成功打包为 {packaged_file_path}")
+            print(f"成功打包为 {packaged_file_path}（text_packager v{TOOL_VERSION}）")
     except FileNotFoundError:
         raise FileNotFoundError("请在本目录添加 meta.json")

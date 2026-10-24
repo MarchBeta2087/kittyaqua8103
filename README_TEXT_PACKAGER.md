@@ -13,7 +13,8 @@
 - 保留原始文件内容的完整性，仅调整标题的缩进。
 - 输出文件带有生成时间戳（基于本地时区）；正文未变化时不更新生成时间。
 - 支持 `extend` 字段：把额外文件、某一小节或内联文本附加到打包结果，不必手改输出文件。
-- 支持时间线锁定：校验 `meta.json` 的 `timeline` 与当前 Git 分支，并在 `alt/*` 分支上自动附加“与主线的差异”。
+- 可选的项目策略（`policy`）：启用后校验 `timeline` 与 Git 分支，并在 `alt` 分支自动附加“与主线的差异”；不写 `policy` 时不做任何校验。
+- 工具版本与项目版本相互独立：工具版本见脚本顶部的 `TOOL_VERSION`、控制台输出与输出文件末尾；项目版本仍是 `meta.json` 的 `version_tag`。
 - 错误提示明确，配置格式错误或文件缺失时能快速定位问题。
 
 ## 系统要求
@@ -95,13 +96,14 @@ python text_packager.py
 | ---- | ---- | ---- | ---- |
 | title | string | 是 | 项目主标题，会显示在打包文档的第一行 |
 | version_tag | string | 是 | 版本标识，例如 v1.0、v2.0-alpha2 |
-| timeline | string | 是 | 设定的“现在”，格式 `YYYY-MM-DD`，用于时间线锁定校验 |
-| author | string | 否 | 维护者署名，仅用于 `alt/*` 分支的标题展示 |
+| timeline | string | 否 | 设定的“现在”，格式 `YYYY-MM-DD`；启用 `policy.enforce_timeline` 时必填 |
+| policy | object | 否 | 项目自己的时间线与分支规矩，见下文；不写则只做打包 |
+| author | string | 否 | 维护者署名，仅用于 `alt` 分支的标题展示 |
 | type | string | 是 | 必须为 "project" |
 | children | array | 是 | 文件或目录的列表，顺序即为打包文档中的排列顺序 |
 | extend | array | 否 | `children` 之外要附加的内容，见下文 |
 
-> 时间线锁定的主线日期由脚本顶部的 `MAINLINE_TIMELINE` 常量决定（本仓库为 `2033-11-13`）；其他项目复用时请一并修改该常量。
+> 未声明 `policy` 时，`timeline` 只用于标题展示；时间线锁定、分支命名与声明文件校验全部关闭。
 
 #### children 子项
 
@@ -136,6 +138,35 @@ python text_packager.py
 - 所有引用的 `.md` 文件必须实际存在，否则程序会报错并中断。
 - 目录层级深度理论上不限，但 Markdown 仅支持 6 级标题（######），过深层级可能影响可读性。
 
+## policy 策略（可选）
+
+`policy` 用来声明项目自己的规矩（时间线与分支）。**不写这个字段时，脚本只做打包**：不校验分支、不要求声明文件、不附加差异节，`timeline` 仅用于标题。
+
+```json
+"policy": {
+  "enforce_timeline": true,
+  "mainline": "2033-11-13"
+}
+```
+
+| 字段 | 默认值 | 说明 |
+| ---- | ------ | ---- |
+| enforce_timeline | `true` | 总开关；为 `false` 时等价于不写 `policy` |
+| mainline | 无（启用时必填） | 主线的时间线日期 |
+| main_branches | `["main", "master"]` | 视为主线的分支名 |
+| alt_branch_pattern | `"alt/<author>/<diverge>"` | 分支命名规则，`<...>` 为占位段 |
+| alt_declaration | `"ALT.md"` | 分支声明文件名（位于仓库根目录） |
+| alt_declaration_fields | 作者 / 锚点 / 分歧点 / 与主线差异 | 声明文件字段名，按 `author`、`anchor`、`diverge`、`differences` 四个角色配置 |
+| alt_diff_section | `"与主线的差异"` | 自动附加小节的标题 |
+
+启用后的行为：
+
+- 主线分支上：`timeline` 必须等于 `mainline`，否则报错；
+- `alt_branch_pattern` 形状的分支上：`timeline` 不得等于 `mainline`，声明文件四个字段齐全，`anchor` 等于 `timeline`，`diverge` 不晚于 `anchor`；打包时自动附加差异小节；
+- 其他分支：跳过校验并给出提示。
+
+`policy` 中出现未知字段会直接报错，防止拼写错误导致规则静默失效。
+
 ## extend 附加内容
 
 `extend` 用于把 `children` 之外的内容附加到打包结果，避免手工修改 `packaged_file.md`。
@@ -168,7 +199,7 @@ python text_packager.py
 
 ## 工作原理
 
-1. 解析 `meta.json`：读取配置，验证必要字段，并校验 `timeline` 与当前 Git 分支。
+1. 解析 `meta.json`：读取配置，验证必要字段；若有 `policy`，按策略校验 `timeline` 与当前 Git 分支。
 2. 递归遍历：根据 children 树，收集所有 `.md` 文件的路径，同时记录每个文件所在的目录深度。
 3. 生成打包内容：
    - 首行：`# 项目标题 版本标签 · 时间线 <timeline>`（`alt` 分支还会附带分支名、作者与分歧点）
@@ -262,9 +293,12 @@ python text_packager.py
 | name 包含 `/` 或 `\` | `name 字段的值不得包含斜杠和反斜杠` |
 | 引用的文件不存在 | `[文件名] 不存在` |
 | 文件不是 `.md` 后缀 | `仅支持 Markdown 文件（.md）` |
-| 缺少 `timeline` 或格式错误 | `meta.json 缺少 timeline 字段（格式 YYYY-MM-DD）` |
-| 主线时间线被改动 | `主线 main 的 timeline 必须为 2033-11-13……` |
-| `alt/*` 分支缺少 `ALT.md` | `ALT.md 不存在：alt 分支必须提供分支声明……` |
+| `timeline` 格式错误 | `meta.json 的 timeline 必须为 YYYY-MM-DD……` |
+| 启用策略但缺少 `timeline` | `已启用 policy.enforce_timeline，但 meta.json 缺少 timeline 字段……` |
+| 主线时间线与 `mainline` 不符 | `主线 main 的 timeline 必须为 2033-11-13……` |
+| `policy` 含未知字段 | `policy 含未知字段：enforce_timline` |
+| 分支命名不符 | `分支必须命名为 alt/<author>/<diverge>，当前为……` |
+| `alt` 分支缺少声明文件 | `ALT.md 不存在：alt/<author>/<diverge> 分支必须提供分支声明` |
 | `extend` 条目不合法 | `extend 条目缺少 value 字段` 等 |
 | `extend` 引用的小节不存在 | `README.md 中找不到小节“时间线”` |
 
@@ -274,5 +308,5 @@ python text_packager.py
 
 ## 更新日志
 
-- v1.1：新增 `extend` 附加内容、时间线锁定校验，以及 `alt/*` 分支的差异自动附加。
+- v1.1：新增 `extend` 附加内容；时间线与分支规则改为可选的 `policy` 策略（不写则不校验，分支命名、声明文件名与字段名均可配置）；新增独立的 `TOOL_VERSION`，与项目版本、时间线区分；正文未变化时不更新生成时间。
 - v1.0：初始版本，支持基本打包功能。
