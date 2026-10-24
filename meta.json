@@ -19,5 +19,8 @@
         { "name": "negotiation.md", "type": "file" }
       ]
     }
+  ],
+  "extend": [
+    { "value": "README.md::时间线", "section": "时间线说明" }
   ]
 }

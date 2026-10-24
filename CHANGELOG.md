@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [v0.1-beta.3] 2026-10-24T20:06:47+08:00
+## [v0.1-beta.3] 2026-10-24T20:17:04+08:00
 
 锁定 0.x 主线时间线为 2033-11-13，并引入分支/fork 规范：
 
@@ -9,6 +9,17 @@
 3. `meta.json` 新增 `timeline`、`author` 字段；
 4. `text_packager.py` 新增时间线校验：`main` 必须为 2033-11-13，`alt/*` 必须偏离该日期且 `ALT.md` 四字段齐全；打包标题附带时间线，`alt` 分支另附分支、作者与分歧点；
 5. 新增 `ALT.example.md`（分支声明模板）与 `alt/INDEX.md`（分支索引）。
+
+### 工具链
+
+`text_packager.py` 支持 `extend`，打包结果不再需要手工修改（工具自身版本见 `README_TEXT_PACKAGER.md` 的更新日志）：
+
+1. `extend` 支持三种来源：`路径::小节标题`（取文件中的某一节）、`路径`（整篇）、`text:…`（内联文本），并可用 `section` 改名、`position` 控制插在 `children` 之前或之后；
+2. `alt/*` 分支打包时自动追加“与主线的差异”（取自 `ALT.md`），无需作者手写；
+3. `meta.json` 增加 `extend` 示例：把 `README.md` 的“时间线”一节作为“时间线说明”附在文末；
+4. `README_TEXT_PACKAGER.md` 补充 `timeline`、`author`、`extend` 的字段说明、工作原理与错误提示；
+5. `README.md` 明确“不要手改生成物，需要附加内容时用 `extend`”。
+6. 正文未变化时不重写 `packaged_file.md`，保留原有生成时间，避免每次运行都产生无意义的时间戳差异。
 
 ## [v0.1-beta.2] 2026-10-24T19:20:59+08:00
 
