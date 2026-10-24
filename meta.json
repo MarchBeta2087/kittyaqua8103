@@ -30,6 +30,7 @@
     }
   ],
   "extend": [
-    { "value": "README.md::时间线", "section": "时间线说明" }
+    { "value": "README.md::时间线", "section": "时间线说明" },
+    { "value": "README.md::版本号规则", "section": "版本号规则" }
   ]
 }
