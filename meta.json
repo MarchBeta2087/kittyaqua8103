@@ -1,6 +1,12 @@
 {
   "title": "KittyAqua8103",
-  "version_tag": "v0.1-beta.2",
+  "version_tag": "v0.1-beta.3",
+  "timeline": "2033-11-13",
+  "policy": {
+    "enforce_timeline": true,
+    "mainline": "2033-11-13"
+  },
+  "author": "MarchBeta2087",
   "type": "project",
   "children": [
     { "name": "profile.md", "type": "file" },
@@ -17,5 +23,8 @@
         { "name": "negotiation.md", "type": "file" }
       ]
     }
+  ],
+  "extend": [
+    { "value": "README.md::时间线", "section": "时间线说明" }
   ]
 }
