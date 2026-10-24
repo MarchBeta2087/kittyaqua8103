@@ -21,7 +21,8 @@
       "type": "directory",
       "children": [
         { "name": "family_members.md", "type": "file" },
-        { "name": "negotiation.md", "type": "file" }
+        { "name": "negotiation.md", "type": "file" },
+        { "name": "relationships.md", "type": "file" }
       ]
     }
   ],
