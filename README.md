@@ -18,7 +18,7 @@ Copyright (c) 2026 MarchBeta2087
 
 ## 版本号规则
 
-写法：`v<major>.<minor>.<patch>[-<stage>.<n>]`，例如 `v0.1.0-beta.3`。
+写法：`v<major>.<minor>.<patch>[-<stage>.<n>]`，例如 `v0.1.0`（正式）或 `v0.2.0-beta.1`（预览）。
 
 | 位 | 含义 | 判据 |
 |---|---|---|
