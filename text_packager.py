@@ -1,5 +1,5 @@
 # text_packager.py
-# Version: 1.1
+# Version: 1.2
 # 467 lines of code, including annotations and blank lines
 # Created: 2026-06-19T15:00:00+08:00
 # Copyright (c) 2026 MarchBeta2087
@@ -16,7 +16,7 @@ from pathlib import Path
 tz = pytz.timezone(get_localzone().key)
 time_text = datetime.now(tz).isoformat(timespec='seconds')
 
-TOOL_VERSION = "1.1"
+TOOL_VERSION = "1.2"
 
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
@@ -307,12 +307,23 @@ def normalize_extend(entries):
         normalized.append({"value": value.strip(), "section": section, "position": position})
     return normalized
 
+def display_path(file_path):
+    """返回相对当前目录的路径（posix 形式），用于来源标记。"""
+    try:
+        return file_path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        return file_path.as_posix()
+
+def source_marker(label, kind):
+    """来源标记，例如（profile.md 开始）。"""
+    return f"（{label} {kind}）"
+
 def join_label(label, value):
     """拼接“字段名 + 值”；ASCII 字段名用 ": "，其余用全角冒号。"""
     separator = ": " if all(ord(char) < 128 for char in label) else "："
     return label + separator + value
 
-def render_extend_entry(entry):
+def render_extend_entry(entry, source_markers = False):
     """把单个 extend 条目渲染为打包行。"""
     value = entry["value"]
     section = entry["section"]
@@ -341,12 +352,19 @@ def render_extend_entry(entry):
             title = section.strip() if section else file_path.stem
         body = strip_blank_edges(body)
 
+    label = None if value.startswith("text:") else value
     rendered = []
+    if source_markers and label:
+        rendered.append(source_marker(label, "开始"))
+        rendered.append("")
     if title:
         rendered.append("## " + title)
         rendered.append("")
     for line in body:
         rendered.append("#" + line if line.startswith("#") else line)
+    if source_markers and label:
+        rendered.append("")
+        rendered.append(source_marker(label, "结束"))
     rendered.append("")
     return rendered
 
@@ -389,6 +407,11 @@ if __name__ == "__main__":
 
         # 解析 extend（附加到打包结果的内容）
         extend_entries = normalize_extend(meta_json.get("extend", []))
+
+        # 是否在打包结果中标出每段内容的来源文件
+        source_markers = meta_json.get("source_markers", False)
+        if not isinstance(source_markers, bool):
+            raise ValueError("source_markers 必须为布尔值")
         
         # 打包文件
         packaged_title = project_title_version
@@ -404,19 +427,25 @@ if __name__ == "__main__":
 
         for entry in extend_entries:
             if entry["position"] == "before":
-                packaged_lines += render_extend_entry(entry)
+                packaged_lines += render_extend_entry(entry, source_markers)
 
         for item in file_list:
             if "file_name" in item:
                 file_name = item["file_name"]
                 if file_name.suffix.lower() == ".md":
                     try:
+                        if source_markers:
+                            packaged_lines.append(source_marker(display_path(file_name), "开始"))
+                            packaged_lines.append("")
                         f = open(file_name, "r", encoding = "utf-8")
                         for line in f:
                             newline = line
                             if line.startswith("#"):
                                 newline = "#" * item["depth"] + newline
                             packaged_lines.append(newline.rstrip("\r\n"))
+                        if source_markers:
+                            packaged_lines.append("")
+                            packaged_lines.append(source_marker(display_path(file_name), "结束"))
                         packaged_lines.append("")
                     except FileNotFoundError:
                         raise ValueError(f"{file_name} 不存在")
@@ -428,7 +457,7 @@ if __name__ == "__main__":
 
         for entry in extend_entries:
             if entry["position"] == "after":
-                packaged_lines += render_extend_entry(entry)
+                packaged_lines += render_extend_entry(entry, source_markers)
 
         # alt 分支自动附加“与主线的差异”
         if timeline_info["differences"]:
