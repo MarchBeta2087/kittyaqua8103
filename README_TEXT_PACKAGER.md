@@ -1,6 +1,6 @@
 # text_packager.py 使用文档
 
-> 本文件同步自 <https://github.com/MarchBeta2087/text_packager> 的 `README.md`（工具版本 v1.1）。修改请先改上游，再同步回本仓库。
+> 本文件同步自 <https://github.com/MarchBeta2087/text_packager> 的 `README.md`（工具版本 v1.2）。修改请先改上游，再同步回本仓库。
 
 ## 简介
 
