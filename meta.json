@@ -1,6 +1,6 @@
 {
   "title": "KittyAqua8103",
-  "version_tag": "v0.1.0",
+  "version_tag": "v0.1.1",
   "timeline": "2033-11-13",
   "policy": {
     "enforce_timeline": true,
@@ -15,6 +15,7 @@
     { "name": "life_experience.md", "type": "file" },
     { "name": "video_2031.md", "type": "file" },
     { "name": "summer_2033.md", "type": "file" },
+    { "name": "autumn_2033.md", "type": "file" },
     { "name": "company.md", "type": "file" },
     { "name": "negotiation_process.md", "type": "file" },
     {
